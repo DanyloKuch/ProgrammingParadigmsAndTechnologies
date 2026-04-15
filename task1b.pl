@@ -1,12 +1,18 @@
-% Задача 1-б (варіант 8)
-% Залишити у списку елементи у позиціях, що відповідають квадратам цілих чисел.
-% Позиції: 1, 4, 9, 16, 25, ...
+% Task 1b (variant 8) / Задача 1-б (варіант 8)
+% Keep elements at positions equal to squares of integers.
+% Залишити елементи на позиціях, що відповідають квадратам цілих чисел.
+% Positions / Позиції: 1, 4, 9, 16, 25, ...
 
-% --- Логіка ---
+:- initialization(main, main).
 
-keep_squares(List, Result) :-
-    keep_squares(List, 1, 1, Result).
+% --- Logic / Логіка ---
 
+% keep_squares(+List, -Result)
+% Entry point / Точка входу
+keep_squares(List, Result) :- keep_squares(List, 1, 1, Result).
+
+% keep_squares(+Rest, +CurrentPos, +NextSquareIndex, -Result)
+% Current position matches a square / Поточна позиція є квадратом — береємо елемент
 keep_squares([], _, _, []).
 keep_squares([H|T], Pos, SqIdx, [H|R]) :-
     Sq is SqIdx * SqIdx,
@@ -14,11 +20,14 @@ keep_squares([H|T], Pos, SqIdx, [H|R]) :-
     Next is Pos + 1,
     NextSq is SqIdx + 1,
     keep_squares(T, Next, NextSq, R).
+% Current position is not a square / Поточна позиція не є квадратом — пропускаємо
 keep_squares([_|T], Pos, SqIdx, R) :-
     Next is Pos + 1,
     keep_squares(T, Next, SqIdx, R).
 
-% --- Зчитування списку ---
+% --- Input / Введення ---
+
+% Read list of integers / Зчитати список цілих чисел
 read_list(Xs) :-
     read_line_to_string(user_input, Line),
     split_string(Line, " \t", " \t", Parts),
@@ -27,18 +36,16 @@ read_list(Xs) :-
     ->  Xs = []
     ;   (   maplist([S,X]>>(number_string(X,S), integer(X)), Parts1, Xs)
         ->  true
-        ;   format("Помилка! Тільки цілі числа через пробіл.~nВведіть список: "),
+        ;   format("Error! Enter integers separated by spaces.~nEnter list: "),
             read_list(Xs)
         )
     ).
 
-% --- Головна програма ---
-:- initialization(main, main).
-
+% --- Main / Головна програма ---
 main :-
-    format("Задача 1-б: Залишити елементи на позиціях-квадратах (1,4,9,16,...)~n"),
-    format("~`-t~55|~n"),
-    format("Введіть числа через пробіл: "),
+    format("Task 1b: Keep elements at square positions (1, 4, 9, 16, ...)~n"),
+    format("~`-t~50|~n"),
+    format("Enter numbers separated by spaces: "),
     read_list(Xs),
     keep_squares(Xs, Result),
-    format("Результат: ~w~n", [Result]).
+    format("Result: ~w~n", [Result]).

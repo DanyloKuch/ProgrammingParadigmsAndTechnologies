@@ -19,20 +19,22 @@ chunkSizes = [n^n | n <- [1..]]
 
 splitSymmetric :: [Int] -> [[Int]]
 splitSymmetric [] = []
-splitSymmetric xs = go xs chunkSizes []
+splitSymmetric xs = go xs chunkSizes [] []
   where
-    go [] _ acc = reverse acc
-    go ys (k:ks) acc
-      | length ys <= 2 * k =
-          -- залишок не можна розбити на два шматки по k -- кладемо все разом
-          reverse (ys : acc)
+    -- fronts: накопичуємо в зворотньому порядку (prepend)
+    -- backs:  накопичуємо у прямому порядку (prepend → вже правильний)
+    go [] _ fronts backs = reverse fronts ++ backs
+    go ys (k:ks) fronts backs
+      | length ys < 2 * k =
+          -- залишок не можна розбити на два шматки по k — кладемо все разом
+          reverse fronts ++ [ys] ++ backs
       | otherwise =
-          let front = take k ys
-              rest1 = drop k ys
-              back  = drop (length rest1 - k) rest1
-              rest2 = take (length rest1 - k) rest1
-          in go rest2 ks (back : front : acc)
-    go ys [] acc = reverse (ys : acc)
+          let front  = take k ys
+              rest1  = drop k ys
+              back   = drop (length rest1 - k) rest1
+              rest2  = take (length rest1 - k) rest1
+          in go rest2 ks (front : fronts) (back : backs)
+    go ys [] fronts backs = reverse fronts ++ [ys] ++ backs
 
 -- Тести
 main :: IO ()
@@ -52,7 +54,7 @@ main = do
   let xs3 = [1..60]
   putStrLn $ "Тест 3: [1..60]"
   putStrLn $ "  Результат: " ++ show (splitSymmetric xs3)
-  putStrLn $ "  (1,1,4,4,27,27 = 64 > 60, тому 27 не повні)"
+  putStrLn $ "  (1,1,4,4,27,27 = 64 > 60, тому залишок одним шматком)"
 
   let xs4 = [] :: [Int]
   putStrLn $ "Тест 4: " ++ show xs4
@@ -61,4 +63,4 @@ main = do
   let xs5 = [99]
   putStrLn $ "Тест 5: " ++ show xs5
   putStrLn $ "  Результат: " ++ show (splitSymmetric xs5)
-  putStrLn $ "  (менше ніж 2*1=2 -- кладемо все в один підсписок)"
+  putStrLn $ "  (1 < 2*1=2 -- кладемо все в один підсписок)"

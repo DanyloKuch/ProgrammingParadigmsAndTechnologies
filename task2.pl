@@ -1,87 +1,59 @@
 % Задача 2 (варіант 16)
-% Розбити заданий список на кілька підсписків, записуючи, за можливості,
-% у перший і останній по 1^1 елементів, потім у другий і передостанній
-% по 2^2 елементів, і т.д.
-%
-% Розміри підсписків: 1, 1, 4, 4, 27, 27, ...
-% (беремо з початку і кінця по черзі)
+% Розбити список на підсписки по 1^1, 2^2, 3^3, ...
 
-% --- Допоміжні предикати ---
+% --- Логіка ---
 
-take(0, _, []) :- !.
-take(_, [], []) :- !.
-take(K, [H|T], [H|R]) :-
-    K > 0, K1 is K - 1,
-    take(K1, T, R).
+take_n(0, _, []) :- !.
+take_n(_, [], []) :- !.
+take_n(K, [H|T], [H|R]) :- K > 0, K1 is K-1, take_n(K1, T, R).
 
-drop(0, List, List) :- !.
-drop(_, [], []) :- !.
-drop(K, [_|T], R) :-
-    K > 0, K1 is K - 1,
-    drop(K1, T, R).
+drop_n(0, List, List) :- !.
+drop_n(_, [], []) :- !.
+drop_n(K, [_|T], R) :- K > 0, K1 is K-1, drop_n(K1, T, R).
 
-% --- Головний предикат ---
-% split_symmetric(+List, -Result)
 split_symmetric([], []) :- !.
 split_symmetric(List, Result) :-
     split_go(List, 1, [], [], Result).
 
-% split_go(+Rest, +N, +FrontsAcc, +BacksAcc, -Result)
-% FrontsAcc — накопичуємо фронтові шматки (зворотній порядок)
-% BacksAcc  — накопичуємо задні шматки (прямий порядок)
 split_go([], _, Fronts, Backs, Result) :-
-    reverse(Fronts, RF),
-    append(RF, Backs, Result).
+    reverse(Fronts, RF), append(RF, Backs, Result).
 split_go(List, N, Fronts, Backs, Result) :-
     K is N ^ N,
     length(List, Len),
     Threshold is 2 * K,
     (   Len < Threshold
-    ->  % не можна взяти по K з обох кінців — кладемо все разом
-        reverse(Fronts, RF),
-        append(RF, [List|Backs], Result)
-    ;   take(K, List, Front),
-        drop(K, List, Rest1),
+    ->  reverse(Fronts, RF), append(RF, [List|Backs], Result)
+    ;   take_n(K, List, Front),
+        drop_n(K, List, Rest1),
         length(Rest1, Len1),
-        DropCount is Len1 - K,
-        drop(DropCount, Rest1, Back),
-        take(DropCount, Rest1, Rest2),
+        DC is Len1 - K,
+        drop_n(DC, Rest1, Back),
+        take_n(DC, Rest1, Rest2),
         N1 is N + 1,
         split_go(Rest2, N1, [Front|Fronts], [Back|Backs], Result)
     ).
 
-% --- Тести ---
+% --- Зчитування списку ---
+read_list(Xs) :-
+    read_line_to_string(user_input, Line),
+    split_string(Line, " \t", " \t", Parts),
+    exclude(=(""), Parts, Parts1),
+    (   Parts1 = []
+    ->  Xs = []
+    ;   (   maplist([S,X]>>(number_string(X,S), integer(X)), Parts1, Xs)
+        ->  true
+        ;   format("Помилка! Тільки цілі числа через пробіл.~nВведіть список: "),
+            read_list(Xs)
+        )
+    ).
+
+% --- Головна програма ---
 :- initialization(main, main).
 
 main :-
     format("Задача 2: Розбити список по 1^1, 2^2, 3^3, ...~n"),
     format("~`-t~55|~n"),
-
-    % Тест 1: [1..10] -> [[1],[2..5],[6..9],[10]]
-    numlist(1, 10, L1),
-    split_symmetric(L1, R1),
-    format("Тест 1: [1..10]~n"),
-    format("  Результат: ~w~n", [R1]),
-    format("  (1 з початку, 1 з кінця, 4 з початку, 4 з кінця)~n"),
-
-    % Тест 2: [7, 9] -> [[7],[9]]
-    split_symmetric([7,9], R2),
-    format("Тест 2: [7,9]~n"),
-    format("  Результат: ~w~n", [R2]),
-
-    % Тест 3: [1..60]
-    numlist(1, 60, L3),
-    split_symmetric(L3, R3),
-    format("Тест 3: [1..60]~n"),
-    format("  Результат: ~w~n", [R3]),
-    format("  (1,1,4,4,27,27=64>60 - залишок одним шматком)~n"),
-
-    % Тест 4: порожній список
-    split_symmetric([], R4),
-    format("Тест 4: []~n"),
-    format("  Результат: ~w~n", [R4]),
-
-    % Тест 5: один елемент
-    split_symmetric([99], R5),
-    format("Тест 5: [99]~n"),
-    format("  Результат: ~w~n", [R5]).
+    format("Введіть числа через пробіл: "),
+    read_list(Xs),
+    split_symmetric(Xs, Result),
+    format("Результат: ~w~n", [Result]).

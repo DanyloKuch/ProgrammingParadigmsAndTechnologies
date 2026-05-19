@@ -1,3 +1,6 @@
+-- Задача 1-а (варіант 8): Зі списку вилучити N найбільших його елементів.
+
+
 import System.IO (hSetEncoding, stdout, utf8)
 
 myNub :: Eq a => [a] -> [a]
@@ -23,7 +26,7 @@ isValidInput s = all (\c -> c == ' ' || c == '-' || c `elem` "0123456789") s
 main :: IO ()
 main = do
     hSetEncoding stdout utf8
-    putStrLn "Задача 1-а: Вилучити N найбільших елементів (без Data.List)"
+    putStrLn "Задача 1-а: Вилучити N найбільших елементів"
     putStrLn "Введи N:"
     nLine <- getLine
     if not (isValidInput nLine) || null nLine

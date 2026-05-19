@@ -1,20 +1,17 @@
-% Task 3 (variant 16) / Задача 3 (варіант 16)
-% Detect whether a DFA accepts at least one word of the form xvxw
-% Виявити, чи приймає скінчений автомат хоча б одне слово виду xvxw
-% for some word x; if yes, exhibit such a word.
-% для деякого слова x; якщо так — навести приклад.
+% Task 3 (Variant 3) / Задача 3 (варіант 3)
+% Given a natural k, list all words of length at most k that are
+% Для заданого натурального k знайти всі слова довжини не більше k,
+% accepted by the DFA. Output them in lexicographic (shortlex) order.
+% які допускаються автоматом. Вивести їх у лексикографічному порядку.
 %
-% Algorithm (product automaton + BFS on pairs of states):
-% Алгоритм (добуток автоматів + BFS по парах станів):
-%   For each candidate Q1 (state where reading x from Q0 may lead):
-%       Q2 = δ*(Q1, V)
-%       BFS in pairs (S1, S2) starting from (Q0, Q2), advancing both
-%       coordinates by the same symbol. If we reach (Q1, Q3) such that
-%       δ*(Q3, W) ∈ F — we found x (path of the BFS).
+% Order: shortlex — shorter words first; among words of equal length —
+% Порядок: shortlex — спочатку коротші слова; серед однакової довжини —
+% lexicographically by the order of symbols in the alphabet.
+% лексикографічно за порядком символів алфавіту.
 
 :- initialization(main, main).
 
-% --- DFA encoding / Опис автоматів ---
+% --- DFA encoding / Опис автомата ---
 % dfa(Name, States, Alphabet, Start, Accepts, Transitions)
 % Transitions: list of (State, Symbol, NextState).
 
@@ -25,7 +22,7 @@ dfa(m1,
       (1,a,2), (1,b,0),
       (2,a,2), (2,b,2) ]).
 
-% M2: even length / парна довжина
+% M2: even length / парна довжина (порожнє слово приймається)
 dfa(m2,
     [0, 1], [a, b], 0, [0],
     [ (0,a,1), (0,b,1),
@@ -38,7 +35,7 @@ dfa(m3,
       (1,a,1), (1,b,2),
       (2,a,1), (2,b,0) ]).
 
-% --- DFA helpers / Допоміжні предикати ---
+% --- DFA run / Прогін автомата ---
 
 step(Trans, Q, A, Q1) :- member((Q, A, Q1), Trans).
 
@@ -47,76 +44,68 @@ run_from(Trans, Q, [C|Cs], Final) :-
     step(Trans, Q, C, Q1),
     run_from(Trans, Q1, Cs, Final).
 
-% --- BFS on pairs of states / BFS по парах станів ---
+accepts_dfa(Name, Word) :-
+    dfa(Name, _, _, Q0, Accepts, Trans),
+    run_from(Trans, Q0, Word, QF),
+    member(QF, Accepts).
+
+% --- Word enumeration / Перерахування слів ---
 %
-% bfs(+Transitions, +Alphabet, +Queue, +Visited, +TargetPred, -XReversed)
-% Queue items: pair(S1, S2, RevX). RevX — символи x у зворотньому порядку
-% (накопичуємо префіксом для O(1) подовження).
+% word_of_length(+N, +Sigma, -Word)
+%   On backtracking, generates all words of length N over Sigma in
+%   На backtracking-у видає всі слова довжини N над Sigma в
+%   lexicographic order (the order of Sigma defines the alphabet order).
+%   лексикографічному порядку (порядок Sigma = порядок алфавіту).
 
-bfs(_, _, [pair(S1, S2, RevX) | _], _, TargetPred, RevX) :-
-    call(TargetPred, S1, S2), !.
-bfs(Trans, Sigma, [pair(S1, S2, RevX) | Rest], Visited, TargetPred, X) :-
-    findall(pair(NS1, NS2, [A|RevX]),
-            ( member(A, Sigma),
-              step(Trans, S1, A, NS1),
-              step(Trans, S2, A, NS2),
-              \+ member((NS1, NS2), Visited) ),
-            Successors),
-    succ_pairs(Successors, NewPairs),
-    append(Visited, NewPairs, Visited1),
-    append(Rest, Successors, Queue1),
-    bfs(Trans, Sigma, Queue1, Visited1, TargetPred, X).
+word_of_length(0, _,     []).
+word_of_length(N, Sigma, [C|W]) :-
+    N > 0,
+    N1 is N - 1,
+    member(C, Sigma),
+    word_of_length(N1, Sigma, W).
 
-succ_pairs([], []).
-succ_pairs([pair(A, B, _)|T], [(A, B)|R]) :- succ_pairs(T, R).
+% --- Accepted words of length up to K / Прийняті слова довжини до K ---
 
-% --- Main search / Основний пошук ---
-%
-% find_x(+DfaName, +V, +W, -X)
-%   X is a word such that the DFA accepts X ++ V ++ X ++ W.
-%   X — слово, для якого автомат приймає X ++ V ++ X ++ W.
+accepted_up_to(Name, K, Words) :-
+    dfa(Name, _, Sigma, _, _, _),
+    findall(W,
+            ( between(0, K, N),
+              word_of_length(N, Sigma, W),
+              accepts_dfa(Name, W) ),
+            Words).
 
-find_x(Name, V, W, X) :-
-    dfa(Name, States, Sigma, Q0, Accepts, Trans),
-    member(Q1, States),
-    run_from(Trans, Q1, V, Q2),
-    InitQueue   = [pair(Q0, Q2, [])],
-    InitVisited = [(Q0, Q2)],
-    Target = [S1, S2]>>(
-        S1 == Q1,
-        run_from(Trans, S2, W, S3),
-        member(S3, Accepts)
-    ),
-    bfs(Trans, Sigma, InitQueue, InitVisited, Target, RevX),
-    reverse(RevX, X), !.
+% --- Pretty printing of a word / Друк слова ---
+% Empty word is shown as <eps>.
 
-% --- Reporting / Друк результату ---
+word_atom([],   '<eps>') :- !.
+word_atom(Word, Atom) :- atomic_list_concat(Word, '', Atom).
 
-report(Name, V, W) :-
-    format("~nDFA: ~w,  v = ~w,  w = ~w~n", [Name, V, W]),
-    (   find_x(Name, V, W, X)
-    ->  append([X, V, X, W], Word),
-        format("  Found x = ~w   ->   xvxw = ~w~n", [X, Word])
-    ;   format("  No such x exists for this (DFA, v, w).~n")
+% --- Reporting / Друк результату одного тесту ---
+
+report(Name, K) :-
+    accepted_up_to(Name, K, Words),
+    length(Words, N),
+    format("~nDFA ~w,  k = ~w   (~w accepted word(s)):~n", [Name, K, N]),
+    (   Words = []
+    ->  format("  (none)~n")
+    ;   forall(member(W, Words),
+               ( word_atom(W, Atom), format("  ~w~n", [Atom]) ))
     ).
 
 % --- Main / Головна програма ---
 
 main :-
-    format("Task 3: detect whether DFA accepts a word of form xvxw~n"),
-    format("~`-t~55|~n"),
+    format("Task 3 (Variant 3): all words of length <= k accepted by DFA~n"),
+    format("Order: shortlex (shorter first, then lexicographic)~n"),
+    format("~`-t~65|~n"),
 
-    % Тест 1: M1 (містить 'aa'), v='a', w='b' -> очікуємо x='a' -> "aaab"
-    report(m1, [a], [b]),
+    % M1: contains "aa"
+    report(m1, 0),    % nothing — q0 is not accepting
+    report(m1, 2),    % only "aa"
+    report(m1, 4),    % aa, aaa, aab, baa, aaaa, aaab, aaba, aabb, abaa, baaa, baab, bbaa
 
-    % Тест 2: M1, v='b', w='b' -> очікуємо x='aa' -> "aabaab"
-    report(m1, [b], [b]),
+    % M2: even length
+    report(m2, 4),    % "", and all words of length 2 and 4
 
-    % Тест 3: M1, v='', w='' -> очікуємо x='aa' -> "aaaa"
-    report(m1, [], []),
-
-    % Тест 4: M2 (парна довжина), v='a', w='' -> |xvxw|=2|x|+1 непарне -> None
-    report(m2, [a], []),
-
-    % Тест 5: M3 (закінчується на 'ab'), v='a', w='b' -> очікуємо x='aa' -> "aaaaab"
-    report(m3, [a], [b]).
+    % M3: ends with "ab"
+    report(m3, 3).    % ab, aab, bab

@@ -3,18 +3,18 @@
 -- одне слово, що може бути подане у вигляді xvxw для деякого слова x.
 -- При ствердній відповіді навести приклад відповідного слова xvxw.
 --
--- Ідея алгоритму (добуток автоматів):
+-- Алгоритм (добуток автоматів):
 -- Для кожного кандидата q1 (стан після читання x із q0) обчислюємо
--- q2 = δ*(q1, v). Далі робимо BFS по парах станів (s1, s2) починаючи
--- з (q0, q2): на кожному символі a одночасно переходимо в
--- (δ(s1, a), δ(s2, a)). Якщо досягаємо такої пари (q1, q3), що
--- δ*(q3, w) ∈ F — знайдено x (шлях у BFS).
+-- q2 = δ*(q1, v). Далі BFS по парах станів (s1, s2) починаючи з (q0, q2):
+-- на кожному символі a одночасно переходимо в (δ(s1, a), δ(s2, a)).
+-- Якщо досягаємо такої пари (q1, q3), що δ*(q3, w) ∈ F — знайдено x.
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.Map.Strict (Map)
 import Data.Set (Set)
 import Data.Maybe (listToMaybe)
+import System.IO (hSetEncoding, stdin, stdout, utf8, hFlush)
 
 -- DFA: states, alphabet, transition, start, accept
 data DFA = DFA
@@ -34,8 +34,6 @@ runOn d = foldl (step d)
 isAccepted :: DFA -> String -> Bool
 isAccepted d s = Set.member (runOn d (dfaStart d) s) (dfaAccept d)
 
--- BFS на парах станів. Map зберігає для кожної досяжної пари
--- найкоротший рядок x, який привів у цю пару з початкової.
 bfsPairs :: DFA -> (Int, Int) -> Map (Int, Int) String
 bfsPairs d start = go (Map.singleton start "") [start]
   where
@@ -52,8 +50,6 @@ bfsPairs d start = go (Map.singleton start "") [start]
           qs'      = qs ++ map fst fresh
       in go visited' qs'
 
--- Пошук x. Перебираємо кандидата q1, для кожного робимо BFS і шукаємо
--- пару (q1, q3) серед досяжних з (q0, δ*(q1, v)).
 findX :: DFA -> String -> String -> Maybe String
 findX d v w = listToMaybe $ do
   q1 <- dfaStates d
@@ -64,13 +60,12 @@ findX d v w = listToMaybe $ do
     then return x
     else []
 
--- --- Допоміжні конструктори DFA ---
 mkDFA :: [Int] -> [Char] -> [((Int, Char), Int)] -> Int -> [Int] -> DFA
 mkDFA qs sigma trans q0 fs = DFA qs sigma (Map.fromList trans) q0 (Set.fromList fs)
 
--- Приклад автомата M1: над {a,b}, приймає слова з підрядком "aa".
--- Стани: 0 — стартовий (жодного a підряд), 1 — щойно бачили 'a',
---        2 — приймальний (вже зустрівся "aa").
+-- --- Preset DFAs ---
+
+-- M1: над {a,b}, приймає слова з підрядком "aa"
 dfaContainsAA :: DFA
 dfaContainsAA = mkDFA [0,1,2] "ab"
   [ ((0,'a'),1), ((0,'b'),0)
@@ -78,14 +73,14 @@ dfaContainsAA = mkDFA [0,1,2] "ab"
   , ((2,'a'),2), ((2,'b'),2)
   ] 0 [2]
 
--- DFA M2: над {a,b}, приймає слова парної довжини.
+-- M2: над {a,b}, приймає слова парної довжини
 dfaEvenLen :: DFA
 dfaEvenLen = mkDFA [0,1] "ab"
   [ ((0,'a'),1), ((0,'b'),1)
   , ((1,'a'),0), ((1,'b'),0)
   ] 0 [0]
 
--- DFA M3: над {a,b}, приймає слова, що закінчуються на "ab".
+-- M3: над {a,b}, приймає слова, що закінчуються на "ab"
 dfaEndsAB :: DFA
 dfaEndsAB = mkDFA [0,1,2] "ab"
   [ ((0,'a'),1), ((0,'b'),0)
@@ -93,35 +88,103 @@ dfaEndsAB = mkDFA [0,1,2] "ab"
   , ((2,'a'),1), ((2,'b'),0)
   ] 0 [2]
 
--- --- Testing / Тестування ---
-report :: String -> DFA -> String -> String -> IO ()
-report name d v w = do
-  putStrLn $ "DFA: " ++ name
-  putStrLn $ "  v = " ++ show v ++ ", w = " ++ show w
-  case findX d v w of
-    Nothing -> putStrLn "  No such x: no word xvxw is accepted."
-    Just x  -> do
-      let word = x ++ v ++ x ++ w
-      putStrLn $ "  Found x = " ++ show x
-      putStrLn $ "  xvxw   = " ++ show word
-      putStrLn $ "  Check (accepted?): " ++ show (isAccepted d word)
+presetByName :: String -> Maybe DFA
+presetByName "m1" = Just dfaContainsAA
+presetByName "m2" = Just dfaEvenLen
+presetByName "m3" = Just dfaEndsAB
+presetByName _    = Nothing
+
+-- --- IO helpers ---
+
+prompt :: String -> IO String
+prompt msg = do
+  putStr msg
+  hFlush stdout
+  getLine
+
+showDFA :: DFA -> IO ()
+showDFA d = do
+  putStrLn $ "  states:   " ++ show (dfaStates d)
+  putStrLn $ "  alphabet: " ++ show (dfaAlphabet d)
+  putStrLn $ "  start:    " ++ show (dfaStart d)
+  putStrLn $ "  accept:   " ++ show (Set.toList (dfaAccept d))
+  putStrLn   "  delta:"
+  mapM_ (\((q,c),q') -> putStrLn $ "    " ++ show q ++ " --" ++ [c] ++ "--> " ++ show q')
+        (Map.toAscList (dfaDelta d))
+
+-- --- Manual DFA input ---
+
+readManualDFA :: IO DFA
+readManualDFA = do
+  alphaLine <- prompt "Алфавіт (символи через пробіл, напр. a b): "
+  let sigma = [c | tok <- words alphaLine, [c] <- [tok]]
+  statesLine <- prompt "Стани (цілі через пробіл, напр. 0 1 2): "
+  let states = map read (words statesLine) :: [Int]
+  startLine <- prompt "Початковий стан: "
+  let start = read startLine :: Int
+  acceptLine <- prompt "Прийнятні стани (через пробіл): "
+  let accept = map read (words acceptLine) :: [Int]
+  putStrLn "Переходи, по одному на рядок у форматі \"стан символ наступний\","
+  putStrLn "порожній рядок — завершити:"
+  trans <- readTransitions
+  return (mkDFA states sigma trans start accept)
+
+readTransitions :: IO [((Int, Char), Int)]
+readTransitions = do
+  line <- getLine
+  if null line
+    then return []
+    else do
+      case words line of
+        [qs, [c], qs'] -> do
+          let q  = read qs  :: Int
+              q' = read qs' :: Int
+          rest <- readTransitions
+          return (((q, c), q') : rest)
+        _ -> do
+          putStrLn "  (помилка формату, пропущено)"
+          readTransitions
+
+-- --- Modes ---
+
+readDFA :: IO (Maybe DFA)
+readDFA = do
+  putStrLn ""
+  putStrLn "Режим:"
+  putStrLn "  1 — preset DFA (m1: містить \"aa\"; m2: парна довжина; m3: закінчується на \"ab\")"
+  putStrLn "  2 — ручний ввід DFA"
+  modeLine <- prompt "Вибір [1/2]: "
+  case modeLine of
+    "1" -> do
+      name <- prompt "Назва preset DFA (m1/m2/m3): "
+      case presetByName name of
+        Just d  -> return (Just d)
+        Nothing -> do
+          putStrLn "Невідома назва."
+          return Nothing
+    "2" -> Just <$> readManualDFA
+    _   -> do
+      putStrLn "Невідомий режим."
+      return Nothing
 
 main :: IO ()
 main = do
-  putStrLn "Task 3: does DFA accept a word of form xvxw"
+  hSetEncoding stdout utf8
+  hSetEncoding stdin  utf8
+  putStrLn "Задача 3: чи приймає DFA слово виду xvxw"
   putStrLn (replicate 55 '-')
-
-  -- Test 1: contains 'aa'; v='a', w='b'. Expect x='a' -> 'aaab'.
-  report "M1 (contains 'aa')" dfaContainsAA "a" "b"
-
-  -- Test 2: contains 'aa'; v='b', w='b'. Expect x='aa' -> 'aabaab'.
-  report "M1 (contains 'aa')" dfaContainsAA "b" "b"
-
-  -- Test 3: contains 'aa'; v='', w=''.   Expect x='aa' -> 'aaaa'.
-  report "M1 (contains 'aa')" dfaContainsAA "" ""
-
-  -- Test 4: even length; v='a', w=''. |xvxw|=2|x|+1 is always odd -> no x.
-  report "M2 (even length)" dfaEvenLen "a" ""
-
-  -- Test 5: ends with 'ab'; v='a', w='b'. Expect x='aa' -> 'aaaaab'.
-  report "M3 (ends with 'ab')" dfaEndsAB "a" "b"
+  mdfa <- readDFA
+  case mdfa of
+    Nothing -> return ()
+    Just d  -> do
+      putStrLn "Обраний автомат:"
+      showDFA d
+      v <- prompt "Введи v: "
+      w <- prompt "Введи w: "
+      case findX d v w of
+        Nothing -> putStrLn "  Немає такого x: жодне слово xvxw не приймається."
+        Just x  -> do
+          let word = x ++ v ++ x ++ w
+          putStrLn $ "  Знайдено x = " ++ show x
+          putStrLn $ "  xvxw       = " ++ show word
+          putStrLn $ "  Перевірка (accepted?): " ++ show (isAccepted d word)

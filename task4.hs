@@ -1,45 +1,26 @@
 -- Task 4 / Задача 4
--- Implementation of a recursive-descent syntactic analyzer for a
--- Реалізація рекурсивного синтаксичного аналізатора для
--- Koreniak-Hopcroft grammar: every production of every non-terminal
--- граматики Кореняка-Хопкрофта: кожне правило кожного нетермінала
--- starts with a terminal symbol, and these terminals are distinct
--- починається з термінального символу, причому ці термінали різні
--- across productions of the same non-terminal.
--- для правил одного нетермінала.
+-- Recursive-descent parser for a Koreniak-Hopcroft grammar:
+-- кожне правило кожного нетермінала починається з термінала, причому
+-- ці перші термінали різні для всіх правил одного нетермінала.
 --
--- The grammar is encoded as a map: non-terminal -> list of productions,
--- Граматика задається відображенням: нетермінал -> список правил,
--- where each production is the list of its right-hand-side symbols
--- де кожне правило — це список символів його правої частини
--- (the first symbol must be a terminal; the rest may be terminals
--- (перший символ обов'язково термінал; решта — термінали
--- or non-terminals).
--- або нетермінали).
---
--- Example grammar / Приклад граматики:
---   E -> ( T )  |  n
---   T -> + E    |  - E
--- Distinct first terminals: E starts with '(' or 'n'; T with '+' or '-'.
+-- Граматика задається відображенням: нетермінал -> список правих частин,
+-- де права частина — послідовність символів (термінал = Char, нетермінал = String).
 
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import Data.List (intercalate)
+import System.IO (hSetEncoding, stdin, stdout, utf8, hFlush)
 
--- A symbol is either a terminal (single character) or a non-terminal (name).
 data Sym = T Char | N String deriving (Eq, Show)
 
--- Grammar: non-terminal name -> list of right-hand-sides (lists of Syms).
 type Grammar = Map String [[Sym]]
 
--- Parse tree: terminal leaf or non-terminal with children.
 data Tree = Leaf Char | Node String [Tree]
 
 instance Show Tree where
   show (Leaf c)     = [c]
   show (Node n cs)  = n ++ "[" ++ intercalate "," (map show cs) ++ "]"
 
--- Pretty / Деревовидний друк
 pretty :: Tree -> String
 pretty = go 0
   where
@@ -47,24 +28,18 @@ pretty = go 0
     go d (Node n cs) = replicate (d*2) ' ' ++ n ++ "\n" ++
                        concatMap (go (d+1)) cs
 
--- Parse a non-terminal from the input. Returns (tree, remaining input)
--- on success, or an error message on failure.
 parseN :: Grammar -> String -> String -> Either String (Tree, String)
 parseN g nt input =
   case Map.lookup nt g of
-    Nothing    -> Left $ "Unknown non-terminal: " ++ nt
+    Nothing    -> Left $ "Невідомий нетермінал: " ++ nt
     Just prods ->
       case input of
-        []      -> Left $ "Unexpected end of input while parsing " ++ nt
+        []      -> Left $ "Несподіваний кінець вводу при розборі " ++ nt
         (c:_)   ->
-          -- Pick the production whose first terminal matches c.
-          -- Грамматика К-Х гарантує, що такий продукт не більше одного.
           case [p | p@(T t : _) <- prods, t == c] of
-            []     -> Left $ "No rule for " ++ nt ++ " starting with '" ++ [c] ++ "'"
+            []     -> Left $ "Немає правила для " ++ nt ++ ", що починається з '" ++ [c] ++ "'"
             (p:_)  -> parseProd g nt p input
-            -- (Take head; uniqueness is part of the grammar invariant.)
 
--- Parse a sequence of symbols (the right-hand-side of one production).
 parseProd :: Grammar -> String -> [Sym] -> String -> Either String (Tree, String)
 parseProd g nt prod input = do
   (children, rest) <- parseSyms g prod input
@@ -78,58 +53,165 @@ parseSyms g (s:ss) inp = do
   return (t:ts, inp2)
 
 parseSym :: Grammar -> Sym -> String -> Either String (Tree, String)
-parseSym _ (T c) []      = Left $ "Expected '" ++ [c] ++ "', got end of input"
+parseSym _ (T c) []      = Left $ "Очікувалось '" ++ [c] ++ "', а ввід вичерпано"
 parseSym _ (T c) (x:xs)
   | c == x    = Right (Leaf c, xs)
-  | otherwise = Left $ "Expected '" ++ [c] ++ "', got '" ++ [x] ++ "'"
+  | otherwise = Left $ "Очікувалось '" ++ [c] ++ "', отримано '" ++ [x] ++ "'"
 parseSym g (N nt) inp    = parseN g nt inp
 
--- Parse a whole input by starting from the start non-terminal and
--- requiring the entire input to be consumed.
 parse :: Grammar -> String -> String -> Either String Tree
 parse g start input = do
   (tree, rest) <- parseN g start input
   case rest of
     [] -> Right tree
-    _  -> Left $ "Extra input after parse: " ++ show rest
+    _  -> Left $ "Залишився непрочитаний ввід: " ++ show rest
 
--- --- Example grammar / Приклад граматики ---
---   E -> '(' T ')' | 'n'
---   T -> '+' E    | '-' E
-exampleGrammar :: Grammar
-exampleGrammar = Map.fromList
-  [ ("E", [ [T '(', N "T", T ')']
-          , [T 'n']
-          ])
-  , ("T", [ [T '+', N "E"]
-          , [T '-', N "E"]
-          ])
-  ]
+-- --- Preset grammars / Готові граматики ---
 
--- --- Tests / Тестування ---
-runTest :: String -> Grammar -> String -> String -> IO ()
-runTest label g start input = do
-  putStrLn $ "Test " ++ label ++ ":  input = " ++ show input
-  case parse g start input of
-    Left err  -> putStrLn $ "  PARSE ERROR: " ++ err
-    Right tr  -> do
-      putStrLn   "  ACCEPTED. Parse tree:"
-      mapM_ (putStrLn . ("    " ++)) (lines (pretty tr))
+-- G1:  E -> ( T ) | n         T -> + E | - E
+preset1 :: (Grammar, String)
+preset1 =
+  ( Map.fromList
+      [ ("E", [ [T '(', N "T", T ')']
+              , [T 'n']
+              ])
+      , ("T", [ [T '+', N "E"]
+              , [T '-', N "E"]
+              ])
+      ]
+  , "E" )
+
+-- G2:  S -> a A | b           A -> c S | d
+preset2 :: (Grammar, String)
+preset2 =
+  ( Map.fromList
+      [ ("S", [ [T 'a', N "A"]
+              , [T 'b']
+              ])
+      , ("A", [ [T 'c', N "S"]
+              , [T 'd']
+              ])
+      ]
+  , "S" )
+
+presetByName :: String -> Maybe (Grammar, String)
+presetByName "g1" = Just preset1
+presetByName "g2" = Just preset2
+presetByName _    = Nothing
+
+showGrammar :: Grammar -> IO ()
+showGrammar g = mapM_ showRule (Map.toAscList g)
+  where
+    showRule (nt, prods) =
+      putStrLn $ "  " ++ nt ++ " -> " ++ intercalate " | " (map showRHS prods)
+    showRHS = unwords . map showSym
+    showSym (T c)  = [c]
+    showSym (N nt) = nt
+
+-- --- IO helpers ---
+
+prompt :: String -> IO String
+prompt msg = do
+  putStr msg
+  hFlush stdout
+  getLine
+
+-- --- Manual grammar input ---
+-- Користувач задає список нетерміналів, потім стартовий символ,
+-- потім рядки виду "LHS sym sym ..." (порожній рядок завершує).
+-- Кожен sym, що збігається з ім'ям нетермінала — нетермінал, інакше — термінал
+-- (має бути рівно одним символом).
+
+readManualGrammar :: IO (Maybe (Grammar, String))
+readManualGrammar = do
+  ntLine <- prompt "Нетермінали (імена через пробіл, напр. E T): "
+  let nts = words ntLine
+  if null nts
+    then do
+      putStrLn "Потрібен щонайменше один нетермінал."
+      return Nothing
+    else do
+      start <- prompt "Стартовий нетермінал: "
+      if start `notElem` nts
+        then do
+          putStrLn "Стартовий символ повинен бути серед нетерміналів."
+          return Nothing
+        else do
+          putStrLn "Правила, по одному на рядок: \"LHS sym sym ...\""
+          putStrLn "Нетермінали — як у списку, термінали — будь-які 1-символьні токени."
+          putStrLn "Порожній рядок — завершити:"
+          rules <- readRules nts
+          return (Just (foldr addRule Map.empty rules, start))
+  where
+    addRule (lhs, rhs) g = Map.insertWith (++) lhs [rhs] g
+
+readRules :: [String] -> IO [(String, [Sym])]
+readRules nts = do
+  line <- getLine
+  if null line
+    then return []
+    else case words line of
+      []     -> readRules nts
+      [_]    -> do
+        putStrLn "  (треба хоч один символ у RHS) пропущено"
+        readRules nts
+      (lhs:rhsToks) ->
+        if lhs `notElem` nts
+          then do
+            putStrLn $ "  (LHS '" ++ lhs ++ "' не є нетерміналом) пропущено"
+            readRules nts
+          else case mapM (toSym nts) rhsToks of
+            Nothing -> do
+              putStrLn "  (термінал має бути 1 символом) пропущено"
+              readRules nts
+            Just rhs -> do
+              rest <- readRules nts
+              return ((lhs, rhs) : rest)
+
+toSym :: [String] -> String -> Maybe Sym
+toSym nts tok
+  | tok `elem` nts = Just (N tok)
+  | length tok == 1 = Just (T (head tok))
+  | otherwise = Nothing
+
+-- --- Mode ---
+
+readGrammar :: IO (Maybe (Grammar, String))
+readGrammar = do
+  putStrLn ""
+  putStrLn "Режим:"
+  putStrLn "  1 — preset (g1: E->(T)|n, T->+E|-E ; g2: S->aA|b, A->cS|d)"
+  putStrLn "  2 — ручний ввід граматики"
+  modeLine <- prompt "Вибір [1/2]: "
+  case modeLine of
+    "1" -> do
+      name <- prompt "Назва preset граматики (g1/g2): "
+      case presetByName name of
+        Just gs -> return (Just gs)
+        Nothing -> do
+          putStrLn "Невідома назва."
+          return Nothing
+    "2" -> readManualGrammar
+    _   -> do
+      putStrLn "Невідомий режим."
+      return Nothing
 
 main :: IO ()
 main = do
-  putStrLn "Task 4: recursive-descent parser for a Koreniak-Hopcroft grammar"
-  putStrLn "Grammar:  E -> ( T )  |  n        T -> + E  |  - E"
+  hSetEncoding stdout utf8
+  hSetEncoding stdin  utf8
+  putStrLn "Task 4: recursive-descent parser (Koreniak-Hopcroft grammar)"
   putStrLn (replicate 65 '-')
-
-  -- Valid inputs / Коректні слова
-  runTest "1" exampleGrammar "E" "n"
-  runTest "2" exampleGrammar "E" "(+n)"
-  runTest "3" exampleGrammar "E" "(-(+n))"
-  runTest "4" exampleGrammar "E" "(+(-(+n)))"
-
-  -- Invalid inputs / Некоректні слова
-  runTest "5" exampleGrammar "E" "+n"     -- E cannot start with '+'
-  runTest "6" exampleGrammar "E" "(n)"    -- T cannot start with 'n'
-  runTest "7" exampleGrammar "E" "n+"     -- extra input
-  runTest "8" exampleGrammar "E" ""       -- empty input
+  mgs <- readGrammar
+  case mgs of
+    Nothing -> return ()
+    Just (g, start) -> do
+      putStrLn "Граматика:"
+      showGrammar g
+      putStrLn $ "Стартовий нетермінал: " ++ start
+      input <- prompt "Введи рядок для розбору: "
+      case parse g start input of
+        Left err -> putStrLn $ "  ПОМИЛКА РОЗБОРУ: " ++ err
+        Right tr -> do
+          putStrLn "  ПРИЙНЯТО. Дерево розбору:"
+          mapM_ (putStrLn . ("    " ++)) (lines (pretty tr))

@@ -1,48 +1,25 @@
 % Task 4 (Variant 3) / Задача 4 (варіант 3)
 % Detect left-recursive non-terminals and eliminate left recursion
 % Виявити ліво-рекурсивні нетермінали та виконати усунення
-% (both direct and indirect).
-% лівої рекурсії (як пряму, так і непряму).
-%
-% Algorithm (Aho-Sethi-Ullman) / Алгоритм (Ахо-Сеті-Ульман):
-%   Fix some order of non-terminals  A1, A2, ..., An.
-%   Зафіксуємо порядок нетерміналів A1, A2, ..., An.
-%   For i = 1..n:
-%     For j = 1..i-1:
-%       For every production  Ai -> Aj γ  in the grammar:
-%         remove it; for every  Aj -> δ  add  Ai -> δ γ.
-%     Eliminate direct left recursion in Ai by the standard
-%     Усунути пряму ліву рекурсію в Ai стандартним перетворенням:
-%     transformation:
-%       Ai  -> Ai α1 | ... | Ai αm | β1 | ... | βp
-%       ===>
-%       Ai  -> β1 Ai'    | ... | βp Ai'
-%       Ai' -> α1 Ai'    | ... | αm Ai' | ε
-%   After processing Ai, every production whose first non-terminal is
-%   Після обробки Ai кожне правило, перший нетермінал якого
-%   one of A1..Ai-1 has been eliminated; the direct LR step removes
-%   є серед A1..Ai-1, вже усунено; крок прямої LR прибирає Ai → Ai α.
-%   Ai → Ai α.
+% (both direct and indirect) — Aho-Sethi-Ullman algorithm.
+% (як пряму, так і непряму) — алгоритм Ахо-Сеті-Ульмана.
 
+:- set_prolog_flag(encoding, utf8).
+:- catch(set_stream(user_input, encoding(utf8)), _, true).
+:- catch(set_stream(user_output, encoding(utf8)), _, true).
+:- catch(set_stream(user_error, encoding(utf8)), _, true).
 :- initialization(main, main).
 :- use_module(library(lists)).
 :- use_module(library(yall)).
 
 % --- Grammar representation / Опис граматики ---
-%   Grammar is a list of terms  rule(NonTerm, RHS).
-%   Граматика — список термів  rule(Нетермінал, ПраваЧастина).
-%   RHS is a list of symbols where a symbol is either:
-%     t(Term)   — terminal,
-%     nt(NT)    — non-terminal.
-%   An empty RHS  []  denotes an epsilon production / ε-правило.
+%   Grammar is a list of rule(NonTerm, RHS).
+%   RHS is a list of symbols where a symbol is t(Term) or nt(NT).
+%   Empty RHS  []  denotes an epsilon production.
 
-% --- Example grammars / Приклади граматик ---
+% --- Preset grammars / Готові граматики ---
 
-% G1: only direct left recursion / тільки пряма ліва рекурсія
-%   E -> E + T | T
-%   T -> T * F | F
-%   F -> ( E ) | id
-grammar(g1, ['E', 'T', 'F'], [
+grammar_preset(g1, ['E', 'T', 'F'], [
     rule('E', [nt('E'), t(+), nt('T')]),
     rule('E', [nt('T')]),
     rule('T', [nt('T'), t(*), nt('F')]),
@@ -51,36 +28,26 @@ grammar(g1, ['E', 'T', 'F'], [
     rule('F', [t(id)])
 ]).
 
-% G2: indirect left recursion / непряма ліва рекурсія
-%   A -> B a | c
-%   B -> A b | d
-grammar(g2, ['A', 'B'], [
+grammar_preset(g2, ['A', 'B'], [
     rule('A', [nt('B'), t(a)]),
     rule('A', [t(c)]),
     rule('B', [nt('A'), t(b)]),
     rule('B', [t(d)])
 ]).
 
-% G3: no left recursion at all / зовсім без лівої рекурсії
-%   S -> a S | b
-grammar(g3, ['S'], [
+grammar_preset(g3, ['S'], [
     rule('S', [t(a), nt('S')]),
     rule('S', [t(b)])
 ]).
 
-% --- Detection of left recursion / Виявлення лівої рекурсії ---
-%
-% direct_lr(+G, ?A): A has a rule  A -> A γ.
-% A має правило вигляду  A -> A γ.
+% --- Detection of left recursion ---
+
 direct_lr(G, A) :-
     member(rule(A, [nt(A) | _]), G).
 
-% left_recursive(+G, ?A): A =>+ A γ for some γ
-% A =>+ A γ для деякого γ (пряма або непряма ліва рекурсія).
 left_recursive(G, A) :-
     left_reach(G, A, A, [A]).
 
-% left_reach(+G, +From, ?To, +Visited)
 left_reach(G, From, To, _) :-
     member(rule(From, [nt(To) | _]), G).
 left_reach(G, From, To, Visited) :-
@@ -90,7 +57,6 @@ left_reach(G, From, To, Visited) :-
     left_reach(G, C, To, [C | Visited]).
 
 % --- Direct left-recursion elimination for one non-terminal ---
-% --- Усунення прямої лівої рекурсії для одного нетермінала ---
 
 eliminate_direct_lr(A, G, NewG) :-
     findall(Alpha,  member(rule(A, [nt(A) | Alpha]), G), Alphas),
@@ -99,9 +65,9 @@ eliminate_direct_lr(A, G, NewG) :-
               \+ Beta = [nt(A) | _] ),
             Betas),
     (   Alphas == []
-    ->  NewG = G            % no direct LR — leave grammar untouched
+    ->  NewG = G
     ;   ( Betas == []
-        ->  format("WARNING: ~w has only left-recursive rules — grammar generates nothing.~n", [A]),
+        ->  format("WARNING: ~w має лише ліво-рекурсивні правила — мова порожня.~n", [A]),
             NewG = G
         ;   fresh_name(A, APrime),
             exclude([R]>>(R = rule(A, _)), G, GWithoutA),
@@ -120,13 +86,6 @@ eliminate_direct_lr(A, G, NewG) :-
 
 fresh_name(A, APrime) :- atom_concat(A, '_p', APrime).
 
-% --- Substituting expansions of Aj into  Ai -> Aj γ  ---
-% replace_first(+G, +Ai, +Aj, -NewG)
-% For every rule  Ai -> Aj γ:  remove it; for every  Aj -> δ
-% add  Ai -> δ γ.  All other rules untouched.
-% Для кожного правила  Ai -> Aj γ:  видалити; для кожного  Aj -> δ
-% додати  Ai -> δ γ.
-
 replace_first(G, Ai, Aj, NewG) :-
     partition(
         [R]>>(R = rule(Ai, [nt(Aj) | _])),
@@ -137,9 +96,6 @@ replace_first(G, Ai, Aj, NewG) :-
               append(Delta, Gamma, NewRHS) ),
             ExpandedRules),
     append(Untouched, ExpandedRules, NewG).
-
-% --- Full elimination algorithm / Повний алгоритм усунення ---
-% eliminate_lr(+OrderedNTs, +Grammar, -NewGrammar)
 
 eliminate_lr(NTs, G, NewG) :-
     eliminate_lr_loop(NTs, [], G, NewG).
@@ -172,34 +128,97 @@ rhs_atom(RHS, Atom) :-
 sym_atom(t(T),  T).
 sym_atom(nt(N), N).
 
-% --- One full report for a grammar / Повний звіт по граматиці ---
+% --- Reading helpers / Допоміжне читання ---
 
-report(Name) :-
-    grammar(Name, NTs, G),
-    format("~n========== Grammar ~w ==========~n", [Name]),
-    show_grammar("Original grammar:", G),
+read_tokens(Tokens) :-
+    read_line_to_string(user_input, Line),
+    split_string(Line, " \t", " \t", Parts),
+    exclude(=(""), Parts, Tokens).
 
-    findall(A, (member(A, NTs), left_recursive(G, A)),       LRs),
-    findall(A, (member(A, NTs), direct_lr(G, A)),            DLRs),
-    findall(A, (member(A, NTs), left_recursive(G, A),
-                                \+ direct_lr(G, A)),         ILRs),
-    format("~nLeft-recursive non-terminals (any):  ~w~n", [LRs]),
-    format("  direct only:    ~w~n", [DLRs]),
-    format("  indirect only:  ~w~n", [ILRs]),
+read_atoms(Atoms) :-
+    read_tokens(Parts),
+    maplist(atom_string, Atoms, Parts).
 
-    eliminate_lr(NTs, G, NewG),
-    show_grammar("After elimination of left recursion:", NewG),
+% Read rules until empty line.
+% Format: "LHS sym sym ..."  (sym is non-terminal if in NTs, else terminal)
+% "epsilon" or "eps" as the sole RHS token denotes empty RHS.
+read_rules(NTs, Rules) :-
+    read_line_to_string(user_input, Line),
+    (   Line == ""
+    ->  Rules = []
+    ;   split_string(Line, " \t", " \t", Parts0),
+        exclude(=(""), Parts0, Parts),
+        maplist(atom_string, Tokens, Parts),
+        (   Tokens = [LHS | RHSToks],
+            member(LHS, NTs)
+        ->  (   RHSToks = [Eps], (Eps == epsilon ; Eps == eps)
+            ->  RHS = []
+            ;   maplist(to_sym(NTs), RHSToks, RHS)
+            ),
+            read_rules(NTs, Rest),
+            Rules = [rule(LHS, RHS) | Rest]
+        ;   format("  (LHS не з нетерміналів або порожньо) пропущено~n"),
+            read_rules(NTs, Rules)
+        )
+    ).
 
-    % verify: no rule has left recursion in the resulting grammar
-    findall(A, (member(rule(A, _), NewG), left_recursive(NewG, A)), AfterLRs),
-    sort(AfterLRs, AfterLRsSorted),
-    format("~nVerification: left-recursive in result: ~w~n", [AfterLRsSorted]).
+to_sym(NTs, Tok, nt(Tok)) :- member(Tok, NTs), !.
+to_sym(_,   Tok, t(Tok)).
+
+% --- Grammar acquisition ---
+
+get_grammar(NTs, G) :-
+    nl,
+    format("Режим:~n"),
+    format("  1 — preset (g1: арифм. вираз; g2: непряма ЛР; g3: без ЛР)~n"),
+    format("  2 — ручний ввід граматики~n"),
+    format("Вибір [1/2]: "),
+    read_line_to_string(user_input, Mode),
+    (   Mode == "1"
+    ->  format("Назва preset (g1/g2/g3): "),
+        read_line_to_string(user_input, NameStr),
+        atom_string(Name, NameStr),
+        (   grammar_preset(Name, NTs, G)
+        ->  true
+        ;   format("Невідома назва.~n"), fail
+        )
+    ;   Mode == "2"
+    ->  format("Нетермінали в порядку для алгоритму (через пробіл): "),
+        read_atoms(NTs),
+        (   NTs = []
+        ->  format("Треба щонайменше один нетермінал.~n"), fail
+        ;   true
+        ),
+        format("Правила, по одному на рядок:~n"),
+        format("  LHS sym sym ...   (LHS з нетерміналів; sym, що є серед нетерміналів, — нетермінал; інакше термінал)~n"),
+        format("  Для ε-правила: \"LHS epsilon\"~n"),
+        format("  Порожній рядок — завершити.~n"),
+        read_rules(NTs, G)
+    ;   format("Невідомий режим.~n"), fail
+    ).
 
 % --- Main ---
 
 main :-
-    format("Task 4 (Variant 3): detect and eliminate left recursion~n"),
+    format("Task 4 (Variant 3): виявлення і усунення лівої рекурсії~n"),
     format("~`-t~65|~n"),
-    report(g1),
-    report(g2),
-    report(g3).
+    (   get_grammar(NTs, G)
+    ->  show_grammar("Вхідна граматика:", G),
+
+        findall(A, (member(A, NTs), left_recursive(G, A)),       LRs),
+        findall(A, (member(A, NTs), direct_lr(G, A)),            DLRs),
+        findall(A, (member(A, NTs), left_recursive(G, A),
+                                    \+ direct_lr(G, A)),         ILRs),
+        format("~nЛіво-рекурсивні нетермінали (будь-які):  ~w~n", [LRs]),
+        format("  лише пряма:    ~w~n", [DLRs]),
+        format("  лише непряма:  ~w~n", [ILRs]),
+
+        eliminate_lr(NTs, G, NewG),
+        show_grammar("Після усунення лівої рекурсії:", NewG),
+
+        findall(A, (member(rule(A, _), NewG), left_recursive(NewG, A)),
+                AfterLRs),
+        sort(AfterLRs, AfterLRsSorted),
+        format("~nПеревірка: ліво-рекурсивні у результаті: ~w~n", [AfterLRsSorted])
+    ;   true
+    ).

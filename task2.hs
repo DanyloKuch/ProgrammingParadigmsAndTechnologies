@@ -7,13 +7,18 @@
 -- (беремо з початку і кінця по черзі)
 --
 -- Приклад: [1..10] -> [[1],[2,3,4,5],[6,7,8,9],[10]]
+--
+-- Поліморфна версія: splitSymmetric :: [a] -> [[a]]
+-- Алгоритм не звертається до значень елементів (лише take/drop/length/reverse),
+-- тому тип-параметр 'a' може бути будь-яким: Int, Char, String тощо.
 
 import System.IO (hSetEncoding, stdout, stdin, utf8, hFlush)
 
 chunkSizes :: [Int]
 chunkSizes = [n^n | n <- [1..]]
 
-splitSymmetric :: [Int] -> [[Int]]
+-- Працює зі списком будь-якого типу завдяки параметру 'a'
+splitSymmetric :: [a] -> [[a]]
 splitSymmetric [] = []
 splitSymmetric xs = go xs chunkSizes [] []
   where
@@ -29,11 +34,6 @@ splitSymmetric xs = go xs chunkSizes [] []
           in go rest2 ks (front : fronts) (back : backs)
     go ys [] fronts backs = reverse fronts ++ [ys] ++ backs
 
-isValidInput :: String -> Bool
-isValidInput s = all (\c -> c == ' ' || c == '-' || c `elem` "0123456789") (trim s)
-  where
-    trim = dropWhile (`elem` " \t\r") . reverse . dropWhile (`elem` " \t\r") . reverse
-
 prompt :: String -> IO String
 prompt msg = do
   putStr msg
@@ -46,10 +46,21 @@ main = do
   hSetEncoding stdin  utf8
   putStrLn "Задача 2: Розбити список симетрично по 1^1, 2^2, 3^3, ..."
   putStrLn (replicate 55 '-')
-  line <- prompt "Введи числа через пробіл (порожньо = []): "
-  if not (isValidInput line)
-    then putStrLn "Помилка! Можна вводити лише цілі числа."
-    else do
-      let xs = map read (words line) :: [Int]
-      putStrLn $ "Вхід:     " ++ show xs
-      putStrLn $ "Результат: " ++ show (splitSymmetric xs)
+
+  -- Демонстрація поліморфізму: список цілих чисел
+  let nums = [1..10] :: [Int]
+  putStrLn $ "Демо [Int]:    " ++ show nums
+  putStrLn $ "Результат:     " ++ show (splitSymmetric nums)
+  putStrLn (replicate 55 '-')
+
+  -- Демонстрація поліморфізму: список рядків
+  let strs = ["ab","bc","cd","de","ef","fg","gh","hi","ij","jk"] :: [String]
+  putStrLn $ "Демо [String]: " ++ show strs
+  putStrLn $ "Результат:     " ++ show (splitSymmetric strs)
+  putStrLn (replicate 55 '-')
+
+  -- Інтерактивний ввід: слова (тип [String] — довільні токени)
+  line <- prompt "Введи елементи через пробіл (будь-які слова або числа): "
+  let xs = words line :: [String]
+  putStrLn $ "Вхід:      " ++ show xs
+  putStrLn $ "Результат: " ++ show (splitSymmetric xs)

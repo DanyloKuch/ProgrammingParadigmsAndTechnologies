@@ -4,6 +4,11 @@
 % (both direct and indirect) — Aho-Sethi-Ullman algorithm.
 % (як пряму, так і непряму) — алгоритм Ахо-Сеті-Ульмана.
 
+%     A → A α₁ | A α₂ | β₁ | β₂
+
+
+% E -> (T) | n  E -> E + T ; A -> B a, B -> A b  
+
 :- set_prolog_flag(encoding, utf8).
 :- catch(set_stream(user_input, encoding(utf8)), _, true).
 :- catch(set_stream(user_output, encoding(utf8)), _, true).
@@ -11,13 +16,6 @@
 :- initialization(main, main).
 :- use_module(library(lists)).
 :- use_module(library(yall)).
-
-% --- Grammar representation / Опис граматики ---
-%   Grammar is a list of rule(NonTerm, RHS).
-%   RHS is a list of symbols where a symbol is t(Term) or nt(NT).
-%   Empty RHS  []  denotes an epsilon production.
-
-% --- Preset grammars / Готові граматики ---
 
 grammar_preset(g1, ['E', 'T', 'F'], [
     rule('E', [nt('E'), t(+), nt('T')]),
@@ -40,7 +38,6 @@ grammar_preset(g3, ['S'], [
     rule('S', [t(b)])
 ]).
 
-% --- Detection of left recursion ---
 
 direct_lr(G, A) :-
     member(rule(A, [nt(A) | _]), G).
@@ -55,8 +52,6 @@ left_reach(G, From, To, Visited) :-
     C \== To,
     \+ member(C, Visited),
     left_reach(G, C, To, [C | Visited]).
-
-% --- Direct left-recursion elimination for one non-terminal ---
 
 eliminate_direct_lr(A, G, NewG) :-
     findall(Alpha,  member(rule(A, [nt(A) | Alpha]), G), Alphas),
@@ -111,7 +106,6 @@ substitute_done([Aj | Rest], Ai, G, NewG) :-
     replace_first(G, Ai, Aj, G1),
     substitute_done(Rest, Ai, G1, NewG).
 
-% --- Pretty printing / Друк граматики ---
 
 show_grammar(Title, G) :-
     format("~n~w~n", [Title]),
@@ -128,7 +122,6 @@ rhs_atom(RHS, Atom) :-
 sym_atom(t(T),  T).
 sym_atom(nt(N), N).
 
-% --- Reading helpers / Допоміжне читання ---
 
 read_tokens(Tokens) :-
     read_line_to_string(user_input, Line),

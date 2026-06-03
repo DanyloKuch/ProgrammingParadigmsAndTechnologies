@@ -2,12 +2,6 @@
 -- Для заданих слів v і w виявити, чи допускає скінчений автомат хоча б
 -- одне слово, що може бути подане у вигляді xvxw для деякого слова x.
 -- При ствердній відповіді навести приклад відповідного слова xvxw.
---
--- Алгоритм (добуток автоматів):
--- Для кожного кандидата q1 (стан після читання x із q0) обчислюємо
--- q2 = δ*(q1, v). Далі BFS по парах станів (s1, s2) починаючи з (q0, q2):
--- на кожному символі a одночасно переходимо в (δ(s1, a), δ(s2, a)).
--- Якщо досягаємо такої пари (q1, q3), що δ*(q3, w) ∈ F — знайдено x.
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -88,10 +82,18 @@ dfaEndsAB = mkDFA [0,1,2] "ab"
   , ((2,'a'),1), ((2,'b'),0)
   ] 0 [2]
 
+-- M4: над {a,b}, приймає слова з парною кількістю символів 'a'
+dfaEvenA :: DFA
+dfaEvenA = mkDFA [0,1] "ab"
+  [ ((0,'a'),1), ((0,'b'),0)
+  , ((1,'a'),0), ((1,'b'),1)
+  ] 0 [0]
+
 presetByName :: String -> Maybe DFA
 presetByName "m1" = Just dfaContainsAA
 presetByName "m2" = Just dfaEvenLen
 presetByName "m3" = Just dfaEndsAB
+presetByName "m4" = Just dfaEvenA
 presetByName _    = Nothing
 
 -- --- IO helpers ---
@@ -151,12 +153,12 @@ readDFA :: IO (Maybe DFA)
 readDFA = do
   putStrLn ""
   putStrLn "Режим:"
-  putStrLn "  1 — preset DFA (m1: містить \"aa\"; m2: парна довжина; m3: закінчується на \"ab\")"
+  putStrLn "  1 — preset DFA (m1: містить \"aa\"; m2: парна довжина; m3: закінчується на \"ab\"; m4: парна кількість 'a')"
   putStrLn "  2 — ручний ввід DFA"
   modeLine <- prompt "Вибір [1/2]: "
   case modeLine of
     "1" -> do
-      name <- prompt "Назва preset DFA (m1/m2/m3): "
+      name <- prompt "Назва preset DFA (m1/m2/m3/m4): "
       case presetByName name of
         Just d  -> return (Just d)
         Nothing -> do

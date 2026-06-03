@@ -10,9 +10,6 @@
 :- catch(set_stream(user_error, encoding(utf8)), _, true).
 :- initialization(main, main).
 
-% --- Preset DFAs / Готові автомати ---
-% dfa_preset(Name, States, Alphabet, Start, Accepts, Transitions)
-
 dfa_preset(m1,
     [0, 1, 2], [a, b], 0, [2],
     [ (0,a,1), (0,b,0),
@@ -30,7 +27,6 @@ dfa_preset(m3,
       (1,a,1), (1,b,2),
       (2,a,1), (2,b,0) ]).
 
-% --- DFA run / Прогін автомата ---
 
 step(Trans, Q, A, Q1) :- member((Q, A, Q1), Trans).
 
@@ -43,7 +39,6 @@ accepts_dfa(Q0, Accepts, Trans, Word) :-
     run_from(Trans, Q0, Word, QF),
     member(QF, Accepts).
 
-% --- Word enumeration / Перерахування слів ---
 
 word_of_length(0, _,     []).
 word_of_length(N, Sigma, [C|W]) :-
@@ -59,12 +54,10 @@ accepted_up_to(Sigma, Q0, Accepts, Trans, K, Words) :-
               accepts_dfa(Q0, Accepts, Trans, W) ),
             Words).
 
-% --- Pretty printing of a word ---
 
 word_atom([],   '<eps>') :- !.
 word_atom(Word, Atom) :- atomic_list_concat(Word, '', Atom).
 
-% --- Reading helpers / Допоміжне читання ---
 
 read_tokens(Tokens) :-
     read_line_to_string(user_input, Line),
@@ -87,7 +80,6 @@ read_int(N) :-
         read_int(N)
     ).
 
-% Read transitions until empty line. Format: "State Symbol Next".
 read_transitions(Trans) :-
     read_line_to_string(user_input, Line),
     (   Line == ""
@@ -102,8 +94,7 @@ read_transitions(Trans) :-
     ;   format("  (помилка формату, пропущено)~n"),
         read_transitions(Trans)
     ).
-
-% --- DFA acquisition / Отримання DFA ---
+-
 
 get_dfa(States, Sigma, Q0, Accepts, Trans) :-
     nl,
